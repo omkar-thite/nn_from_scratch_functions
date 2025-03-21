@@ -1,7 +1,4 @@
 def initialize_parameters(layers_dims):
-    # In accordance with lab so as to verify results
-    np.random.seed(3)
-
     L = len(layers_dims)    
     parameters = {}
     for l in range(1, L):
@@ -228,22 +225,17 @@ def update_parameters_with_momentum(parameters, grads, v, beta, learning_rate):
     """
     Update parameters using Momentum
     
-    Arguments:
-    parameters -- python dictionary containing your parameters:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients for each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    v -- python dictionary containing the current velocity:
-                    v['dW' + str(l)] = ...
-                    v['db' + str(l)] = ...
-    beta -- the momentum hyperparameter, scalar
-    learning_rate -- the learning rate, scalar
+    Args:
+    parameters (dict): parameters                
+    grads (dict): gradients             
+    v (dict): current velocity:
+                 
+    beta (scalar): momentum hyperparameter
+    learning_rate (scalar): learning rate
     
     Returns:
-    parameters -- python dictionary containing your updated parameters 
-    v -- python dictionary containing your updated velocities
+    parameters (dict): updated parameters 
+    v (dict): updated velocities
     """
     L = len(parameters) // 2
 
@@ -261,17 +253,13 @@ def update_parameters_with_gd(parameters, grads, learning_rate):
     """
     Update parameters using one step of gradient descent
     
-    Arguments:
-    parameters -- python dictionary containing your parameters to be updated:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients to update each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    learning_rate -- the learning rate, scalar.
+    Args:
+    parameters (dict): parameters                
+    grads (dict): gradients                      
+    learning_rate (scalar): learning rate
     
     Returns:
-    parameters -- python dictionary containing your updated parameters 
+    parameters (dict): updated parameters 
     """
     L = len(parameters) // 2
 
@@ -287,24 +275,23 @@ def update_parameters_with_adam(parameters, grads, v, s, t, learning_rate=0.01,
     Update parameters using Adam
     
     Arguments:
-    parameters -- python dictionary containing your parameters:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients for each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    v -- Adam variable, moving average of the first gradient, python dictionary
-    s -- Adam variable, moving average of the squared gradient, python dictionary
-    t -- Adam variable, counts the number of taken steps
-    learning_rate -- the learning rate, scalar.
-    beta1 -- Exponential decay hyperparameter for the first moment estimates 
-    beta2 -- Exponential decay hyperparameter for the second moment estimates 
-    epsilon -- hyperparameter preventing division by zero in Adam updates
+    parameters (dict): parameters                
+    grads (dict): gradients           
+    
+    v (dict): moving average of the first gradient (Adam variable)
+    s (dict): moving average of the squared gradient (Adam variable)
+    t (scalar): number of taken steps (Adam variable)
+    
+    learning_rate (scalar): learning rate
+    
+    beta1 (scalar): Exponential decay hyperparameter for the first moment estimates 
+    beta2 (scalar): Exponential decay hyperparameter for the second moment estimates 
+    epsilon (scalar): Hyperparameter preventing division by zero in Adam updates
 
     Returns:
-    parameters -- python dictionary containing your updated parameters 
-    v -- Adam variable, moving average of the first gradient, python dictionary
-    s -- Adam variable, moving average of the squared gradient, python dictionary
+    parameters (dict): updated parameters 
+    v (dict): moving average of the first gradient (Adam variable)
+    s (dict): moving average of the squared gradient (Adam variable)
     """
     L = len(parameters) // 2
     v_corrected = {}
@@ -339,23 +326,23 @@ def model_with_lrate_decay(X, Y, layers_dims, optimizer, learning_rate = 0.0007,
     """
     Neural network model which can be run in different optimizer modes and includes learning rate decay
     
-    Arguments:
-    X -- input data, of shape (2, number of examples)
-    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
-    layers_dims -- python list, containing the size of each layer
-    learning_rate -- the learning rate, scalar.
-    mini_batch_size -- the size of a mini batch
-    beta -- Momentum hyperparameter
-    beta1 -- Exponential decay hyperparameter for the past gradients estimates 
-    beta2 -- Exponential decay hyperparameter for the past squared gradients estimates 
-    epsilon -- hyperparameter preventing division by zero in Adam updates
-    num_epochs -- number of epochs
-    print_cost -- True to print the cost every 1000 epochs
-    decay -- function that updates learning rate 
-    decay_rate -- rate used to calculate extent of decaying in decay parameter function
+    Args:
+    X (ndarray) (2, number of examples): input data
+    Y (ndarray) (1, number of examples):  True label vector (1 for blue dot / 0 for red dot)
+    layers_dims (list): Specifies size of each layer
+    learning_rate (scalar): learning rate
+    mini_batch_size (scalar): size of a mini batch
+    beta (scalar): Momentum hyperparameter
+    beta1 (scalar): Exponential decay hyperparameter for the first moment estimates 
+    beta2 (scalar): Exponential decay hyperparameter for the second moment estimates 
+    epsilon (scalar): Hyperparameter preventing division by zero in Adam updates
+    num_epochs (int): number of epochs
+    print_cost (bool): True to print the cost every 1000 epochs
+    decay (callable): function that updates learning rate 
+    decay_rate (scalar): rate used to calculate extent of decaying in decay parameter function
     
     Returns:
-    parameters -- python dictionary containing your updated parameters 
+    parameters (dict): updated parameters 
     """
 
     L = len(layers_dims)             # number of layers in the neural networks
