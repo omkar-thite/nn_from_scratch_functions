@@ -157,7 +157,7 @@ def predict(X, y, parameters):
     This function is used to predict the results of a  n-layer neural network.
     Args:
     X (ndarray): data set of examples you would like to label
-    parameters -- parameters of the trained model
+    parameters (dict): parameters of the trained model
     
     Returns:
     p -- predictions for the given dataset X
@@ -175,14 +175,14 @@ def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
         Creates a list of random minibatches from (X, Y)
         
         Arguments:
-        X -- input data, of shape (input size, number of examples)
-        Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
-        mini_batch_size -- size of the mini-batches, integer
+        X (ndarray) (input size, #examples): input data
+        Y (ndarray) (1, #examples): True labels vector (1 for blue dot / 0 for red dot)
+        mini_batch_size(int): size of the mini-batches
         
         Returns:
-        mini_batches -- list of synchronous (mini_batch_X, mini_batch_Y)
+        mini_batches (list) : List of synchronus minibatches in format (mini_batch_X, mini_batch_Y)
         """
-        np.random.seed(seed)  # Grading purspose
+        np.random.seed(seed)  
         
         m = X.shape[1]
         mini_batches = []
@@ -216,15 +216,12 @@ def initialize_velocity(parameters):
     Initializes the velocity as a python dictionary with:
                 - keys: "dW1", "db1", ..., "dWL", "dbL" 
                 - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
-    Arguments:
-    parameters -- python dictionary containing your parameters.
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
+    Args:
+    parameters(dict): parameters               
     
     Returns:
-    v -- python dictionary containing the current velocity.
-                    v['dW' + str(l)] = velocity of dWl
-                    v['db' + str(l)] = velocity of dbl
+    v (dict): Current velocity
+
     """
 
     L = len(parameters) // 2
@@ -242,19 +239,14 @@ def initialize_adam(parameters):
                 - keys: "dW1", "db1", ..., "dWL", "dbL" 
                 - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
     
-    Arguments:
-    parameters -- python dictionary containing your parameters.
-                    parameters["W" + str(l)] = Wl
-                    parameters["b" + str(l)] = bl
+    Args:
+    parameters(dict): parameters             
+
     
     Returns: 
-    v -- python dictionary that will contain the exponentially weighted average of the gradient. Initialized with zeros.
-                    v["dW" + str(l)] = ...
-                    v["db" + str(l)] = ...
-    s -- python dictionary that will contain the exponentially weighted average of the squared gradient. Initialized with zeros.
-                    s["dW" + str(l)] = ...
-                    s["db" + str(l)] = ...
+    v (dict): Current velocity
 
+    s (dict): Exponentially weighted average of the squared gradient. Initialized with zeros.                
     """
     L = len(parameters) // 2
     v = {}
@@ -290,12 +282,12 @@ def predict_dec(parameters, X):
     """
     Used for plotting decision boundary.
     
-    Arguments:
-    parameters -- python dictionary containing your parameters 
-    X -- input data of size (m, K)
+    Args:
+    parameters (dict): parameters 
+    X (ndarray) (m, K): Input data
     
     Returns
-    predictions -- vector of predictions of our model (red: 0 / blue: 1)
+    predictions (ndarray): vector of predictions of our model (red: 0 / blue: 1)
     """
     
     # Predict using forward propagation and a classification threshold of 0.5
@@ -307,13 +299,13 @@ def update_lr(learning_rate0, epoch_num, decay_rate):
     """
     Calculates updated the learning rate using exponential weight decay.
     
-    Arguments:
-    learning_rate0 -- Original learning rate. Scalar
-    epoch_num -- Epoch number. Integer
-    decay_rate -- Decay rate. Scalar
+    Args:
+    learning_rate0 (scalar): original learning rate
+    epoch_num (int): Epoch number
+    decay_rate (scalar): decay rate
 
     Returns:
-    learning_rate -- Updated learning rate. Scalar 
+    learning_rate (scalar): updated learning rate
     """
     return learning_rate0 * (1 / (1 + (decay_rate * epoch_num)))
 
@@ -322,13 +314,13 @@ def schedule_lr_decay(learning_rate0, epoch_num, decay_rate, timeInterval=1000):
     Calculates updated the learning rate using exponential weight decay.
     
     Arguments:
-    learning_rate0 -- Original learning rate. Scalar
-    epoch_num -- Epoch number. Integer.
-    decay_rate -- Decay rate. Scalar.
-    time_interval -- Number of epochs where you update the learning rate.
+    learning_rate0 (scalar): original learning rate
+    epoch_num (int): Epoch number
+    decay_rate (scalar): decay rate
+    time_interval (int): Number of epochs where you update the learning rate
 
     Returns:
-    learning_rate -- Updated learning rate. Scalar 
+    learning_rate (scalar): updated learning rate
     """
 
     return learning_rate0 / (1 + (decay_rate * (np.floor(epoch_num/timeInterval))))
