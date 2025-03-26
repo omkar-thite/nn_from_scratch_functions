@@ -1,3 +1,8 @@
+import numpy as np
+import math
+import nn_from_scratch_functions as nn
+import matplotlib.pyplot as plt
+
 def flatten_parameters(parameters):
     """
     Flatten parameters dictionary into a single vector.
@@ -48,7 +53,7 @@ def compute_numerical_gradient(X, Y,
                                parameters, 
                                forward_propagation, 
                                forwardprop_args,
-                               cost_function, 
+                               cost_function: str, 
                                cost_args, 
                                epsilon=1e-7):
     """
@@ -56,18 +61,14 @@ def compute_numerical_gradient(X, Y,
     parameters (dict): Contains Ws and bs
     """
     theta = flatten_parameters(parameters)
-    #print('theta shape: ', theta.shape)
     
     parameter_shapes = {key: parameters[key].shape for key in parameters.keys()}
-    print(parameter_shapes)
     
     # # parameters including those in Ws and bs
     num_total_parameters = theta.shape[0]
-    #print('total params: ', num_total_parameters)
    
     # array of numerical gradient of each parameter
     numerical_gradients = np.zeros((num_total_parameters, 1))
-    #print('num_grad shape: ', numerical_gradients.shape)
     
     J_plus = np.zeros((num_total_parameters, 1))
     J_minus = np.zeros((num_total_parameters, 1))
@@ -86,16 +87,15 @@ def compute_numerical_gradient(X, Y,
         AL_minus, _ = forward_propagation(X, params_minus, **forwardprop_args)
 
 
-        if cost_function=='l2_cost':
-            J_plus[i] = L2_cost(AL_plus, Y, params_plus, **cost_args)
-            J_minus[i] = L2_cost(AL_minus, Y, params_minus, **cost_args)
-        elif cost_function=='standard':
-            J_plus[i] = cost(AL_plus, Y, **cost_args)
-            J_minus[i] = cost(AL_minus, Y, **cost_args)
+        if cost_function == 'l2_cost':
+            J_plus[i] = nn.L2_cost(AL_plus, Y, params_plus, **cost_args)
+            J_minus[i] = nn.L2_cost(AL_minus, Y, params_minus, **cost_args)
+        elif cost_function == 'crossentropy_cost':
+            J_plus[i] = nn.crossentropy_cost(AL_plus, Y, **cost_args)
+            J_minus[i] = nn.crossentropy_cost(AL_minus, Y, **cost_args)
         
         numerical_gradients[i] = (J_plus[i] - J_minus[i]) / (2*epsilon)
 
-    #print('final num_grads shape: ', numerical_gradients.shape)
     return unflatten_parameters(numerical_gradients, parameter_shapes, prefix='d')
 
 
@@ -105,7 +105,7 @@ def gradient_checking(X, Y,
                       backward_propagation, 
                       forwardprop_args={},
                       backprop_args = {},
-                      cost_function='standard', 
+                      cost_function: str= 'crossentropy_cost', 
                       cost_args={}):
 
     gradapprox = compute_numerical_gradient(X, Y, 
@@ -114,9 +114,7 @@ def gradient_checking(X, Y,
                                             forwardprop_args,
                                             cost_function, 
                                             cost_args)
-    
-    print(f'gradaaprox keys: {gradapprox.keys()}')
-    
+        
     AL, caches = forward_propagation(X, parameters, **forwardprop_args)
     grads = backward_propagation(AL, Y, caches, **backprop_args)
 
@@ -130,34 +128,29 @@ def gradient_checking(X, Y,
     # grads store derivatives in reverse order due to backprop db3, dW3, ...
     # Order keys of grads before flattening it
     grads = order_parameters(grads)
-    print(f'grads keys: {grads.keys()}')
   
     gradapprox = flatten_parameters(gradapprox)
     grads = flatten_parameters(grads)
-    print('flattened grads shape: ', grads.shape)
-    print('flattened gradapprox shape: ', gradapprox.shape)
-
 
     # Difference
     numerator = np.linalg.norm(grads - gradapprox)
     denominator = np.linalg.norm(grads) + np.linalg.norm(gradapprox)
     difference = numerator / denominator
 
-    if True:
-        
-        if difference > 2e-7:
+    if True:       
+        if difference > 1e-5:
             print ("\033[93m" + "There is a mistake in the backward propagation! difference = " + str(difference) + "\033[0m")
         else:
             print ("\033[92m" + "Your backward propagation works perfectly fine! difference = " + str(difference) + "\033[0m")
 
     return difference
 
-def predict(X, y, parameters):
+def predict(X, y, parameters, forward_propagation):
     """
     This function is used to predict the results of a  n-layer neural network.
     Args:
     X (ndarray): data set of examples you would like to label
-    parameters (dict): parameters of the trained model
+    parameters -- parameters of the trained model
     
     Returns:
     p -- predictions for the given dataset X
@@ -170,96 +163,7 @@ def predict(X, y, parameters):
     
     return p
 
-def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
-        """
-        Creates a list of random minibatches from (X, Y)
-        
-        Arguments:
-        X (ndarray) (input size, #examples): input data
-        Y (ndarray) (1, #examples): True labels vector (1 for blue dot / 0 for red dot)
-        mini_batch_size(int): size of the mini-batches
-        
-        Returns:
-        mini_batches (list) : List of synchronus minibatches in format (mini_batch_X, mini_batch_Y)
-        """
-        np.random.seed(seed)  
-        
-        m = X.shape[1]
-        mini_batches = []
-    
-        # Shuffle
-        indices = list(np.random.permutation(m))
-        X = X[:, indices]
-        Y = Y[:, indices].reshape((1,m))
-    
-        inc = mini_batch_size
-    
-        # Partition
-        num_complete_mini_batches = math.floor(m/inc)
-    
-        for k in range(num_complete_mini_batches):
-            mini_batch_X = X[:, k * inc : (k + 1) * inc]
-            mini_batch_Y = Y[:, k * inc : (k + 1) * inc]
-            mini_batch = (mini_batch_X, mini_batch_Y)
-            mini_batches.append(mini_batch)
-    
-        # end case where last batch has < mini_batch_size examples
-        mini_batch_X = X[:, num_complete_mini_batches * mini_batch_size : m]
-        mini_batch_Y = Y[:, num_complete_mini_batches * mini_batch_size : m]
-        mini_batch = (mini_batch_X, mini_batch_Y)
-        mini_batches.append(mini_batch)
-    
-        return mini_batches
 
-def initialize_velocity(parameters):
-    """
-    Initializes the velocity as a python dictionary with:
-                - keys: "dW1", "db1", ..., "dWL", "dbL" 
-                - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
-    Args:
-    parameters(dict): parameters               
-    
-    Returns:
-    v (dict): Current velocity
-
-    """
-
-    L = len(parameters) // 2
-    v = {}
-
-    for l in range(1, L+1):
-        v[f'dW{l}'] = np.zeros(parameters[f'W{l}'].shape)
-        v[f'db{l}'] = np.zeros(parameters[f'b{l}'].shape)
-    
-    return v
-
-def initialize_adam(parameters):
-    """
-    Initializes v and s as two python dictionaries with:
-                - keys: "dW1", "db1", ..., "dWL", "dbL" 
-                - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
-    
-    Args:
-    parameters(dict): parameters             
-
-    
-    Returns: 
-    v (dict): Current velocity
-
-    s (dict): Exponentially weighted average of the squared gradient. Initialized with zeros.                
-    """
-    L = len(parameters) // 2
-    v = {}
-    s = {}
-
-    for l in range(1, L+1):
-        v['dW' + str(l)] = np.zeros(parameters['W' + str(l)].shape)
-        v['db' + str(l)] = np.zeros(parameters['b' + str(l)].shape)
-
-        s['dW' + str(l)] = np.zeros(parameters['W' + str(l)].shape)
-        s['db' + str(l)] = np.zeros(parameters['b' + str(l)].shape)
-
-    return v, s
 
 def plot_decision_boundary(model, X, y):
     # Set min and max values and give it some padding
@@ -282,45 +186,16 @@ def predict_dec(parameters, X):
     """
     Used for plotting decision boundary.
     
-    Args:
-    parameters (dict): parameters 
-    X (ndarray) (m, K): Input data
+    Arguments:
+    parameters -- python dictionary containing your parameters 
+    X -- input data of size (m, K)
     
     Returns
-    predictions (ndarray): vector of predictions of our model (red: 0 / blue: 1)
+    predictions -- vector of predictions of our model (red: 0 / blue: 1)
     """
     
     # Predict using forward propagation and a classification threshold of 0.5
-    AL, cache = forward_propagation(X, parameters)
+    AL, cache = nn.forward_propagation(X, parameters)
     predictions = (AL > 0.5)
     return predictions
 
-def update_lr(learning_rate0, epoch_num, decay_rate):
-    """
-    Calculates updated the learning rate using exponential weight decay.
-    
-    Args:
-    learning_rate0 (scalar): original learning rate
-    epoch_num (int): Epoch number
-    decay_rate (scalar): decay rate
-
-    Returns:
-    learning_rate (scalar): updated learning rate
-    """
-    return learning_rate0 * (1 / (1 + (decay_rate * epoch_num)))
-
-def schedule_lr_decay(learning_rate0, epoch_num, decay_rate, timeInterval=1000):
-    """
-    Calculates updated the learning rate using exponential weight decay.
-    
-    Arguments:
-    learning_rate0 (scalar): original learning rate
-    epoch_num (int): Epoch number
-    decay_rate (scalar): decay rate
-    time_interval (int): Number of epochs where you update the learning rate
-
-    Returns:
-    learning_rate (scalar): updated learning rate
-    """
-
-    return learning_rate0 / (1 + (decay_rate * (np.floor(epoch_num/timeInterval))))
