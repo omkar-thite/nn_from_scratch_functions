@@ -138,7 +138,9 @@ def sigmoid(Z: np.ndarray) -> np.ndarray:
     Returns:
     np.ndarray : sigmoid activation
     '''
-    return 1/(1 + np.exp(-Z))
+    # Clip extreme values to prevent overflow
+    Z = np.clip(Z, -500, 500)
+    return 1 / (1 + np.exp(-Z))
 
 
 def forward_linear(A_prev: np.ndarray, W: np.ndarray, b: np.ndarray) -> np.ndarray:
