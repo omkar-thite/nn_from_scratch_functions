@@ -7,6 +7,7 @@ Neural network implementation from scratch using python functions.
 - Classification application is implemented in separate notebook which utilizes this implementation.
   - Dataset is synthesized using sklearn library.
   - Classification is only for demonstration purpose.
+  - this notebook will be updated soon with use of other tools like adam, dropout etc.
 
 Any comments, suggestions or imprpovements are always welcome.
 Thank you for visiting.
