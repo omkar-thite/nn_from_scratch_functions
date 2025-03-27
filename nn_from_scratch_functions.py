@@ -180,21 +180,22 @@ def forward_activation(Z: np.ndarray, activation: str='linear') -> np.ndarray:
         return Z
 
 
-def forward_propagation(X: np.ndarray, parameters: dict) -> tuple: 
+def forward_propagation(X: np.ndarray, parameters: dict, keep_prob: float=None) -> tuple: 
     '''
     Performs forward propagation through a neural network.
 
     Args:
     X (ndarray): Input data
     paramaters (dict): Dictionary containing initialized network parameters:
-
+    keep_prob (float): Dropout parameter
+    
     Returns:
     tuple: (AL, caches)
         - AL (ndarray) (1, number_of_examples): Output of the final layer (sigmoid activation)
         - caches (dict): Dictionary of dictionary: containing cached values needed for backpropagation
     '''
     
-    def propagate_forward(A_prev, W, b, activation='relu'):
+    def propagate_forward(A_prev, W, b, activation='relu', keep_prob=None):
         '''
         Forward pass through layer
 
@@ -202,7 +203,8 @@ def forward_propagation(X: np.ndarray, parameters: dict) -> tuple:
         W (ndarray): Weights of layer
         b (ndarray): Biases of layer
         activation (str): Activation to apply on linear output, one of 'sigmoid' or 'relu'
-
+        keep_prob (float): Dropout parameter
+        
         Returns:
         (ndarray): Output of forward pass through layer
         cache : Cache of current layer
@@ -212,6 +214,16 @@ def forward_propagation(X: np.ndarray, parameters: dict) -> tuple:
         A = forward_activation(Z, activation=activation)
         cache = {'A_prev': A_prev, 'Z': Z, 'W': W, 'b':b, 'activation':activation} 
 
+        # Dropout
+        if keep_prob:
+            D = np.random.rand(A.shape[0], A.shape[1])
+            D = (D < keep_prob).astype('int')
+            A = A * D
+            A /= keep_prob
+            cache['dropout'] = True
+            cache['D'] = D
+        else:
+            cache['dropout'] = False
         return A, cache
           
     caches= {}
@@ -224,7 +236,7 @@ def forward_propagation(X: np.ndarray, parameters: dict) -> tuple:
         W = parameters[f'W{l}']
         b = parameters[f'b{l}']
         
-        A, cache = propagate_forward(A_prev, W, b, 'relu')
+        A, cache = propagate_forward(A_prev, W, b, 'relu', keep_prob)
         
         # Store cache for current layer
         caches[f'layer{l}'] = cache
@@ -286,11 +298,11 @@ def backprop_layer(dA, cache):
     # Compute gradients for parameters and previous layer
     dA_prev =  np.dot(W.T, dZ) 
     dW = (1/m) * np.dot(dZ, A_prev.T) 
-    db = (1/m) * np.sum(dZ,axis=1, keepdims=True) 
+    db = (1/m) * np.sum(dZ,axis=1, keepdims=True)     
     
     return (dA_prev, dW, db)
 
-def backward_propagation(AL, Y, caches):
+def backward_propagation(AL, Y, caches, keep_prob=None):
     '''
     Complete backward propagation through all layers
     
@@ -308,22 +320,25 @@ def backward_propagation(AL, Y, caches):
     
     # Initialize backward propagation with output layer
     dAL = cost_grad(AL, Y)
-    grads[f'dA{L}'] = dAL
     
     # Process all layers in reverse
     dA = dAL
     for l in reversed(range(1, L + 1)):
-
-        cache = caches[f'layer{l}']
-        dA_prev, dW, db = backprop_layer(dA, cache)
         
+        cache = caches[f'layer{l}']
+        
+        if cache['dropout']:
+            dA *= cache['D'] / keep_prob        
+        
+        dA_prev, dW, db = backprop_layer(dA, cache)
+            
         # Store gradients
         grads[f'dW{l}'] = dW
         grads[f'db{l}'] = db
-        
-        if l > 1:  # Only store intermediate dA if not the input layer
-            grads[f'dA{l-1}'] = dA_prev
 
+        if l > 1:   # Only store intermediate dA if not the input layer
+            grads[f'dA{l}'] = dA     
+      
         # Update for next iteration
         dA = dA_prev
         
@@ -409,6 +424,7 @@ def L2_cost(AL: np.ndarray, Y: np.ndarray, parameters: dict,  lambd: float=0.0) 
     return total_cost
 
 
+
 def model(
     X: np.ndarray,
     Y: np.ndarray,
@@ -455,7 +471,7 @@ def model(
         if keep_prob == 1:
             AL, caches = forward_propagation(X, parameters)
         elif keep_prob < 1:
-            AL, caches = forward_propagation_with_dropout(X, parameters, keep_prob)
+            AL, caches = forward_propagation(X, parameters, keep_prob)
         
         # Compute cost
         if lambd:
@@ -469,7 +485,7 @@ def model(
         elif lambd != 0:
             grads = L2_backpropagation(AL, Y, caches, lambd)
         elif keep_prob < 1:
-            grads = backward_propagation_with_dropout(AL, Y, caches, keep_prob)
+            grads = backward_propagation(AL, Y, caches, keep_prob)
         
         # Update parameters using gradient descent        
         parameters = update_parameters(parameters, grads, learning_rate)
@@ -511,6 +527,7 @@ def update_parameters(parameters: dict,
         parameters[f'W{l}'] -= learning_rate * grads[f'dW{l}']
         parameters[f'b{l}'] -= learning_rate * grads[f'db{l}']
     return parameters
+
 
 
 def update_parameters_with_momentum(parameters, grads, v, beta, learning_rate):
@@ -792,84 +809,6 @@ def model_with_lrate_decay(X, Y, layers_dims, optimizer, learning_rate = 0.0007,
 
     return parameters, costs
 
-def forward_propagation_with_dropout(X, parameters, keep_prob = 0.5):
-    np.random.seed(1)
-
-    caches= {}
-    A_prev = X
-    L = len(parameters)//2  
-    
-    # relu params W1 to WL-1 second last layer
-    for l in range(1, L):
-        W = parameters[f'W{l}']
-        b = parameters[f'b{l}']
-        Z = forward_linear(A_prev, W, b)
-        A = forward_activation(Z, activation='relu')
-
-        # Dropout
-        D = np.random.rand(A.shape[0], A.shape[1])
-        D = (D < keep_prob).astype('int')
-        A = A * D
-        A /= keep_prob
-
-        # Store caches
-        caches[f'layer{l}'] = (A_prev, Z, W, b, D)
-        A_prev = A
-    
-    # for params WL-1 last layer No Dropout
-    WL = parameters[f'W{L}']
-    bL = parameters[f'b{L}']
-    ZL = forward_linear(A_prev, WL, bL)
-    AL = forward_activation(ZL, activation='sigmoid')
-    caches[f'layer{L}'] = (A_prev, ZL, WL, bL) 
-    
-    return AL, caches
-
-def backward_propagation_with_dropout(AL, Y, caches, keep_prob):    
-    m = Y.shape[1]
-    grads = {}
-    L = len(caches)
-        
-    # Sigmoid layer L
-    current_cache = caches[f'layer{L}']
-    A_prev, Z, W, b  = current_cache
-    dAL = cost_grad(AL, Y)
-    grads[f'dA{L}'] = dAL
-    
-    dA_prev, dW, db = backprop_layer(dAL, current_cache, activation='sigmoid')
-    #print(f'dA{L-1}')
-    grads[f'dA{L-1}'] = dA_prev
-    grads[f'dW{L}'] = dW
-    grads[f'db{L}'] = db
-
-    _, _, _, _, D = caches[f'layer{L-1}'] 
-    grads[f'dA{L-1}'] *= (D / keep_prob) 
-    #print(f'dA{L-1}*D{L-1}')
-
-
-    for l in reversed(range(1, L)):
-        #print(f'layer{l}:')
-        A_prev, Z, W, b, D = caches[f'layer{l}']
-        current_cache = (A_prev, Z, W, b)  # expected in backprop_layer()
-        dA_prev, dW, db = backprop_layer(grads[f'dA{l}'], current_cache, activation='relu')
-       
-        grads[f'dA{l-1}'] = dA_prev
-        #print(f'dA{l-1}')
-        grads[f'dW{l}'] = dW
-        grads[f'db{l}'] = db
-
-        if l > 1:
-            _, _, _, _, D = caches[f'layer{l-1}'] 
-            grads[f'dA{l-1}'] *= (D / keep_prob) 
-            #print(f'dA{l-1}*D{l-1}')
-
-
-        '''# Dropout steps
-        print(f'dA{l}*D{l}')
-        grads[f'dA{l}'] *= (D / keep_prob)'''
-
-
-    return grads
 
 def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
     """
