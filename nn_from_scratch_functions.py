@@ -1,11 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from math import floor
+
+np.random.seed(123)
 
 # Initializations
-def initialize_parameters_he(layers_dims):
+def initialize_parameters_he(layers_dims, verbose: bool=False):
     """
     Args:
     layer_dims(list) : Size of each layer (including input layer)
+    verbose (bool) : Display shapes of initialized parameters if True
     
     Returns:
     parameters (dict): Randomly initialized parameters Ws and bs with He initialization .
@@ -18,6 +22,12 @@ def initialize_parameters_he(layers_dims):
     for i in range(1, len(layers_dims)):
         parameters['W'+str(i)] = np.random.randn(layers_dims[i], layers_dims[i-1]) * np.sqrt(2.0/layers_dims[i-1])
         parameters['b'+str(i)] = np.zeros((layers_dims[i], 1))
+
+    if verbose:
+        print(f'Initialized parameters:')
+        for key in parameters:
+            print(f'{key} shape: {parameters[key].shape}')
+            
     return parameters   
 
 
@@ -27,7 +37,7 @@ def initialize_parameters_LeCun(layers_dims: list, verbose: bool = False) -> dic
 
     Args:
     layer_dims (list): Contains number of neurons per layer in order, including those of input layer.
-    verbose (bool): 
+    verbose (bool):  Display shapes of initialized parameters if True
 
     Returns:
     parameters (dict): Initialized parameters according to LeCun initialization 
@@ -35,7 +45,6 @@ def initialize_parameters_LeCun(layers_dims: list, verbose: bool = False) -> dic
     Notes:
     Weights are initialized with Lecun Initialization, biases are initialized to zero.
     '''
-    
     L = len(layers_dims)    
     parameters = {}
     for l in range(1, L):
@@ -429,13 +438,17 @@ def model(
     X: np.ndarray,
     Y: np.ndarray,
     layers_dims: list,
-    num_iters: int = 30000,
+    num_iters: int = 5000,
     epsilon: float = 1e-8,
     learning_rate: float = 0.3,
     lambd: float = 0.0,
     keep_prob: float = 1.0,
+    mini_batch_size = 64,
     print_cost: bool = True,
-    print_interval: int = 1000
+    decay: bool=True,
+    decay_rate: float = 1.0,
+    beta1: float = 0.9, 
+    beta2: float = 0.999,  
 ) -> tuple:
     """
     Implements a deep neural network model with configurable L2 regularization and dropout.
@@ -449,241 +462,33 @@ def model(
     learning_rate -- learning rate of the gradient descent update rule
     lambd -- L2 regularization parameter (0 = no regularization)
     keep_prob -- probability of keeping a neuron active during dropout (1 = no dropout)
+    mini_batch_size (int): Size of mini batches to use.
     print_cost -- boolean, True to print cost during training
-    print_interval -- interval of iterations between printing costs
-    
+    decay (bool): indicates whether to decay learning rate with iterations
+    decay_rate (float): rate used to calculate extent of decaying in decay parameter function
+    beta1 (float): Exponential decay hyperparameter for the past gradients estimates 
+    beta2 (float): Exponential decay hyperparameter for the past squared gradients estimates 
+ 
     Returns:
-    parameters -- parameters learned by the model
-    costs -- list of costs recorded during training
+    parameters (dict): parameters learned by the model
+    costs (list): list of costs recorded during training
     """
+    seed = 10
     costs = []
     
     L = len(layers_dims)
     L = L - 1  # don't count X which isn't a layer with parameters
-    
-    m = X.shape[1]
+    t = 0  # Adam variable
+    m = X.shape[1]  
     
     parameters = initialize_parameters_he(layers_dims)
+
+    v, s = initialize_adam(parameters)
     
     for i in range(num_iters):
-        
-        # Forward propagation
-        if keep_prob == 1:
-            AL, caches = forward_propagation(X, parameters)
-        elif keep_prob < 1:
-            AL, caches = forward_propagation(X, parameters, keep_prob)
-        
-        # Compute cost
-        if lambd:
-            J = L2_cost(AL, Y, parameters, lambd)
-        else:
-            J = crossentropy_cost(AL, Y)
 
-        # Backward propagation
-        if lambd == 0 and keep_prob == 1:
-            grads = backward_propagation(AL, Y, caches)
-        elif lambd != 0:
-            grads = L2_backpropagation(AL, Y, caches, lambd)
-        elif keep_prob < 1:
-            grads = backward_propagation(AL, Y, caches, keep_prob)
-        
-        # Update parameters using gradient descent        
-        parameters = update_parameters(parameters, grads, learning_rate)
-        
-        # Print the loss every 10000 iterations
-        if i % 10000 == 0:
-            print("Cost after iteration {}: {}".format(i, J))
-        if i % 1000 == 0:
-            costs.append(J)
-
-    if print_cost:
-        # plot the cost
-        plt.plot(costs)
-        plt.ylabel('cost')
-        plt.xlabel('iterations (x1,000)')
-        plt.title("Learning rate =" + str(learning_rate))
-        plt.show()
-            
-    return parameters, grads, costs
-
-def update_parameters(parameters: dict, 
-                      grads: dict, 
-                      learning_rate: float
-                     ) -> dict:
-    '''
-    Updates parameters using gradients
-    
-    Args:
-    parameters (dict): Dictionary containing network parameters
-    grads (dict): Dictionary containing gradients 
-    learning_rate (float): Learning rate
-    
-    Returns:
-    dict: Updated parameters
-    '''
-    L = len(parameters)//2
-    
-    for l in range(1, L + 1):
-        parameters[f'W{l}'] -= learning_rate * grads[f'dW{l}']
-        parameters[f'b{l}'] -= learning_rate * grads[f'db{l}']
-    return parameters
-
-
-
-def update_parameters_with_momentum(parameters, grads, v, beta, learning_rate):
-    """
-    Update parameters using Momentum
-    
-    Arguments:
-    parameters -- python dictionary containing your parameters:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients for each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    v -- python dictionary containing the current velocity:
-                    v['dW' + str(l)] = ...
-                    v['db' + str(l)] = ...
-    beta -- the momentum hyperparameter, scalar
-    learning_rate -- the learning rate, scalar
-    
-    Returns:
-    parameters -- python dictionary containing your updated parameters 
-    v -- python dictionary containing your updated velocities
-    """
-    L = len(parameters) // 2
-
-    for l in range(1, L+1):
-        v[f'dW{l}'] = beta * v[f'dW{l}'] + (1 - beta) * grads[f'dW{l}']
-        v[f'db{l}'] = beta * v[f'db{l}'] + (1 - beta) * grads[f'db{l}']
-
-        
-        parameters[f'W{l}'] -= learning_rate * v[f'dW{l}']
-        parameters[f'b{l}'] -= learning_rate * v[f'db{l}']
-
-    return parameters, v
-
-def update_parameters_with_gd(parameters, grads, learning_rate):
-    """
-    Update parameters using one step of gradient descent
-    
-    Arguments:
-    parameters -- python dictionary containing your parameters to be updated:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients to update each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    learning_rate -- the learning rate, scalar.
-    
-    Returns:
-    parameters -- python dictionary containing your updated parameters 
-    """
-    L = len(parameters) // 2
-
-    for i in range(1, L+1):
-        parameters[f'W{i}'] -= learning_rate * grads[f'dW{i}']
-        parameters[f'b{i}'] -= learning_rate * grads[f'db{i}']
-    
-    return parameters
-
-def update_parameters_with_adam(parameters, grads, v, s, t, learning_rate=0.01, 
-                                beta1=0.9, beta2=0.999, epsilon=1e-8):
-    """
-    Update parameters using Adam
-    
-    Arguments:
-    parameters -- python dictionary containing your parameters:
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    grads -- python dictionary containing your gradients for each parameters:
-                    grads['dW' + str(l)] = dWl
-                    grads['db' + str(l)] = dbl
-    v -- Adam variable, moving average of the first gradient, python dictionary
-    s -- Adam variable, moving average of the squared gradient, python dictionary
-    t -- Adam variable, counts the number of taken steps
-    learning_rate -- the learning rate, scalar.
-    beta1 -- Exponential decay hyperparameter for the first moment estimates 
-    beta2 -- Exponential decay hyperparameter for the second moment estimates 
-    epsilon -- hyperparameter preventing division by zero in Adam updates
-
-    Returns:
-    parameters -- python dictionary containing your updated parameters 
-    v -- Adam variable, moving average of the first gradient, python dictionary
-    s -- Adam variable, moving average of the squared gradient, python dictionary
-    """
-    L = len(parameters) // 2
-    v_corrected = {}
-    s_corrected = {}
-
-    for l in range(1, L+1):
-        # Moving average of the gradients.
-        v['dW'+str(l)] = beta1 * v['dW'+str(l)] + (1-beta1) * grads['dW'+str(l)]
-        v['db'+str(l)] = beta1 * v['db'+str(l)] + (1-beta1) * grads['db'+str(l)]
-
-        # Compute bias-corrected first moment estimate. 
-        v_corrected['dW'+str(l)] = v['dW'+str(l)] / (1 - (beta1 ** t)) 
-        v_corrected['db'+str(l)] = v['db'+str(l)] / (1 - (beta1 ** t))
-
-        # Moving average of the squared gradients.        
-        s['dW'+str(l)] = beta2 * s['dW'+str(l)] + (1 - beta2) * (grads['dW'+str(l)] ** 2)
-        s['db'+str(l)] = beta2 * s['db'+str(l)] + (1 - beta2) * (grads['db'+str(l)] ** 2)
-        
-        # Compute bias-corrected second raw moment estimate
-        s_corrected['dW'+str(l)] = s['dW'+str(l)] / (1 - (beta2 ** t))
-        s_corrected['db'+str(l)] = s['db'+str(l)] / (1 - (beta2 ** t))
-
-        # Update parameters
-        parameters['W'+str(l)] -= learning_rate * v_corrected['dW'+str(l)]/(np.sqrt(s_corrected['dW'+str(l)]) + epsilon)
-        parameters['b'+str(l)] -= learning_rate * v_corrected['db'+str(l)]/(np.sqrt(s_corrected['db'+str(l)]) + epsilon)
-    
-    return parameters, v, s, v_corrected, s_corrected
-
-def model_with_optimization(X, Y, layers_dims, optimizer, learning_rate = 0.0007, mini_batch_size = 64, beta = 0.9,
-          beta1 = 0.9, beta2 = 0.999,  epsilon = 1e-8, num_epochs = 5000, print_cost = True):
-    """
-    3-layer neural network model which can be run in different optimizer modes.
-    
-    Arguments:
-    X -- input data, of shape (2, number of examples)
-    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
-    optimizer -- the optimizer to be passed, gradient descent, momentum or adam
-    layers_dims -- python list, containing the size of each layer
-    learning_rate -- the learning rate, scalar.
-    mini_batch_size -- the size of a mini batch
-    beta -- Momentum hyperparameter
-    beta1 -- Exponential decay hyperparameter for the past gradients estimates 
-    beta2 -- Exponential decay hyperparameter for the past squared gradients estimates 
-    epsilon -- hyperparameter preventing division by zero in Adam updates
-    num_epochs -- number of epochs
-    print_cost -- True to print the cost every 1000 epochs
-
-    Returns:
-    parameters -- python dictionary containing your updated parameters 
-    """
-
-    L = len(layers_dims)             # number of layers in the neural networks
-    costs = []                       # to keep track of the cost
-    t = 0                            # initializing the counter required for Adam update
-    seed = 10                        # For grading purposes, so that your "random" minibatches are the same as ours
-    m = X.shape[1]                   # number of training examples
-    
-    # Initialize parameters
-    parameters = initialize_parameters(layers_dims)
-
-    # Initialize the optimizer
-    if optimizer == "gd":
-        pass # no initialization required for gradient descent
-    elif optimizer == "momentum":
-        v = initialize_velocity(parameters)
-    elif optimizer == "adam":
-        v, s = initialize_adam(parameters)
-    
-    # Optimization loop
-    for i in range(num_epochs):
-        
         # Define the random minibatches. We increment the seed to reshuffle differently the dataset after each epoch
-        seed = seed + 1
+        seed += 1
         minibatches = random_mini_batches(X, Y, mini_batch_size, seed)
         cost_total = 0
         
@@ -693,188 +498,54 @@ def model_with_optimization(X, Y, layers_dims, optimizer, learning_rate = 0.0007
             (minibatch_X, minibatch_Y) = minibatch
 
             # Forward propagation
-            AL, caches = forward_propagation(minibatch_X, parameters)
-
-            # Compute cost and add to the cost total
-            cost_total += cost(AL, minibatch_Y)
-
+            if keep_prob == 1:
+                AL, caches = forward_propagation(minibatch_X, parameters)
+            elif keep_prob < 1:
+                AL, caches = forward_propagation(minibatch_X, parameters, keep_prob)
+            
+            # Compute cost
+            if lambd:
+                J = L2_cost(AL, minibatch_Y, parameters, lambd)
+            else:
+                J = crossentropy_cost(AL, minibatch_Y)
+    
+            cost_total += J
+            
             # Backward propagation
-            grads = backward_propagation(AL, minibatch_Y, caches)
-
-            # Update parameters
-            if optimizer == "gd":
-                parameters = update_parameters_with_gd(parameters, grads, learning_rate)
-            elif optimizer == "momentum":
-                parameters, v = update_parameters_with_momentum(parameters, grads, v, beta, learning_rate)
-            elif optimizer == "adam":
-                t = t + 1 # Adam counter
-                parameters, v, s, _, _ = update_parameters_with_adam(parameters, grads, v, s,
-                                                               t, learning_rate, beta1, beta2,  epsilon)
-        cost_avg = cost_total / m
-        
-        # Print the cost every 1000 epoch
-        if print_cost and i % 1000 == 0:
-            print ("Cost after epoch %i: %f" %(i, cost_avg))
-        if print_cost and i % 100 == 0:
-            costs.append(cost_avg)
-
-    return parameters, costs
-
-def model_with_lrate_decay(X, Y, layers_dims, optimizer, learning_rate = 0.0007, mini_batch_size = 64, beta = 0.9,
-          beta1 = 0.9, beta2 = 0.999,  epsilon = 1e-8, num_epochs = 5000, print_cost = True, decay=None, decay_rate=1):
-    """
-    Neural network model which can be run in different optimizer modes and includes learning rate decay
-    
-    Arguments:
-    X -- input data, of shape (2, number of examples)
-    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
-    layers_dims -- python list, containing the size of each layer
-    learning_rate -- the learning rate, scalar.
-    mini_batch_size -- the size of a mini batch
-    beta -- Momentum hyperparameter
-    beta1 -- Exponential decay hyperparameter for the past gradients estimates 
-    beta2 -- Exponential decay hyperparameter for the past squared gradients estimates 
-    epsilon -- hyperparameter preventing division by zero in Adam updates
-    num_epochs -- number of epochs
-    print_cost -- True to print the cost every 1000 epochs
-    decay -- function that updates learning rate 
-    decay_rate -- rate used to calculate extent of decaying in decay parameter function
-    
-    Returns:
-    parameters -- python dictionary containing your updated parameters 
-    """
-
-    L = len(layers_dims)             # number of layers in the neural networks
-    costs = []                       # to keep track of the cost
-    t = 0                            # initializing the counter required for Adam update
-    seed = 10                        # For grading purposes, so that your "random" minibatches are the same as ours
-    m = X.shape[1]                   # number of training examples
-    lr_rates = []
-    learning_rate0 = learning_rate   # the original learning rate
-    
-    # Initialize parameters
-    parameters = initialize_parameters_he(layers_dims)
-
-    # Initialize the optimizer
-    if optimizer == "gd":
-        pass # no initialization required for gradient descent
-    elif optimizer == "momentum":
-        v = initialize_velocity(parameters)
-    elif optimizer == "adam":
-        v, s = initialize_adam(parameters)
-    
-    # Optimization loop
-    for i in range(num_epochs):
-        
-        # Define the random minibatches. We increment the seed to reshuffle differently the dataset after each epoch
-        seed = seed + 1
-        minibatches = random_mini_batches(X, Y, mini_batch_size, seed)
-        cost_total = 0 # sum of costs over all mini batches in this epoch
-        
-        for minibatch in minibatches:
-
-            # Select a minibatch
-            (minibatch_X, minibatch_Y) = minibatch
-
-            # Forward propagation
-            AL, caches = forward_propagation(minibatch_X, parameters)
-
-            # Compute cost and add to the cost total
-            cost_total += cost(AL, minibatch_Y)
-
-            # Backward propagation
-            grads = backward_propagation(AL, minibatch_Y, caches)
-
-            # Update parameters
-            if optimizer == "gd":
-                parameters = update_parameters_with_gd(parameters, grads, learning_rate)
-            elif optimizer == "momentum":
-                parameters, v = update_parameters_with_momentum(parameters, grads, v, beta, learning_rate)
-            elif optimizer == "adam":
-                t = t + 1 # Adam counter
-                parameters, v, s, _, _ = update_parameters_with_adam(parameters, grads, v, s,
-                                                               t, learning_rate, beta1, beta2,  epsilon)
+            if lambd == 0 and keep_prob == 1:
+                grads = backward_propagation(AL, minibatch_Y, caches)
+            elif lambd != 0:
+                grads = L2_backpropagation(AL, minibatch_Y, caches, lambd)
+            elif keep_prob < 1:
+                grads = backward_propagation(AL, minibatch_Y, caches, keep_prob)
+            
+            # Update parameters using gradient descent      
+            # parameters = update_parameters(parameters, grads, learning_rate)
+            t = t + 1
+            parameters, v, s = update_parameters_with_adam(parameters, grads, v, s, t, learning_rate, 
+                                                             beta1, beta2, epsilon)
+            
         cost_avg = cost_total / m
 
         if decay:
-            learning_rate = decay(learning_rate0, i, decay_rate)
+            learning_rate = schedule_lr_decay(learning_rate, i, decay_rate, timeInterval=1000)
         
-        # Print the cost every 1000 epoch
-        if print_cost and i % 1000 == 0:
-            print ("Cost after epoch %i: %f" %(i, cost_avg))
-            if decay:
-                print("learning rate after epoch %i: %f"%(i, learning_rate))
-        if print_cost and i % 100 == 0:
-            costs.append(cost_avg)
-
-    return parameters, costs
-
-
-def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
-    """
-    Creates a list of random minibatches from (X, Y)
+        # Print the loss every 10000 iterations
+        if i % 1000 == 0:
+            print(f"Cost after iteration {i}: {cost_avg}")
+        if i % 100 == 0:
+            costs.append(J)      
     
-    Arguments:
-    X -- input data, of shape (input size, number of examples)
-    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
-    mini_batch_size -- size of the mini-batches, integer
+    if print_cost:
+        # plot the cost
+        plt.plot(costs)
+        plt.ylabel('cost')
+        plt.xlabel('iterations (x1,000)')
+        plt.title("Learning rate =" + str(learning_rate))
+        plt.show()
+            
+    return parameters, grads, costs
     
-    Returns:
-    mini_batches -- list of synchronous (mini_batch_X, mini_batch_Y)
-    """
-    np.random.seed(seed)  # Grading purspose
-    
-    m = X.shape[1]
-    mini_batches = []
-
-    # Shuffle
-    indices = list(np.random.permutation(m))
-    X = X[:, indices]
-    Y = Y[:, indices].reshape((1,m))
-
-    inc = mini_batch_size
-
-    # Partition
-    num_complete_mini_batches = math.floor(m/inc)
-
-    for k in range(num_complete_mini_batches):
-        mini_batch_X = X[:, k * inc : (k + 1) * inc]
-        mini_batch_Y = Y[:, k * inc : (k + 1) * inc]
-        mini_batch = (mini_batch_X, mini_batch_Y)
-        mini_batches.append(mini_batch)
-
-    # end case where last batch has < mini_batch_size examples
-    mini_batch_X = X[:, num_complete_mini_batches * mini_batch_size : m]
-    mini_batch_Y = Y[:, num_complete_mini_batches * mini_batch_size : m]
-    mini_batch = (mini_batch_X, mini_batch_Y)
-    mini_batches.append(mini_batch)
-
-    return mini_batches
-
-def initialize_velocity(parameters):
-    """
-    Initializes the velocity as a python dictionary with:
-                - keys: "dW1", "db1", ..., "dWL", "dbL" 
-                - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
-    Arguments:
-    parameters -- python dictionary containing your parameters.
-                    parameters['W' + str(l)] = Wl
-                    parameters['b' + str(l)] = bl
-    
-    Returns:
-    v -- python dictionary containing the current velocity.
-                    v['dW' + str(l)] = velocity of dWl
-                    v['db' + str(l)] = velocity of dbl
-    """
-
-    L = len(parameters) // 2
-    v = {}
-
-    for l in range(1, L+1):
-        v[f'dW{l}'] = np.zeros(parameters[f'W{l}'].shape)
-        v[f'db{l}'] = np.zeros(parameters[f'b{l}'].shape)
-    
-    return v
 
 def initialize_adam(parameters):
     """
@@ -882,15 +553,15 @@ def initialize_adam(parameters):
                 - keys: "dW1", "db1", ..., "dWL", "dbL" 
                 - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
     
-    Arguments:
-    parameters -- python dictionary containing your parameters.
+    Args:
+    parameters (dict): Parameters of network
                     parameters["W" + str(l)] = Wl
                     parameters["b" + str(l)] = bl
     
     Returns: 
-    v -- python dictionary that will contain the exponentially weighted average of the gradient. Initialized with zeros.
+    v (dict): python dictionary that will contain the exponentially weighted average of the gradient. Initialized with zeros.
                    
-    s -- python dictionary that will contain the exponentially weighted average of the squared gradient. Initialized with zeros.
+    s (dict): python dictionary that will contain the exponentially weighted average of the squared gradient. Initialized with zeros.
                    
 
     """
@@ -906,20 +577,112 @@ def initialize_adam(parameters):
         s['db' + str(l)] = np.zeros(parameters['b' + str(l)].shape)
 
     return v, s
-
-def update_lr(learning_rate0, epoch_num, decay_rate):
+        
+def update_parameters_with_adam(parameters, grads, v, s, t, learning_rate=0.01, 
+                                beta1=0.9, beta2=0.999, epsilon=1e-8):
     """
-    Calculates updated the learning rate using exponential weight decay.
+    Update parameters using Adam optimization
     
-    Arguments:
-    learning_rate0 -- Original learning rate. Scalar
-    epoch_num -- Epoch number. Integer
-    decay_rate -- Decay rate. Scalar
+    Args:
+    parameters (dict): containing model parameters:
+                    parameters['W' + str(l)] = Wl
+                    parameters['b' + str(l)] = bl
+    grads (dict): containing your gradients for each parameters:
+                    grads['dW' + str(l)] = dWl
+                    grads['db' + str(l)] = dbl
+    v (dict): Adam variable, moving average of the first gradient
+    s (dict): Adam variable, moving average of the squared gradient
+    t (scalar): Adam variable, counts the number of taken steps
+    learning_rate (scalar): the learning rate
+    beta1 (scalar): Exponential decay hyperparameter for the first moment estimates 
+    beta2 (scalar): Exponential decay hyperparameter for the second moment estimates 
+    epsilon (scalar): hyperparameter preventing division by zero in Adam updates
 
     Returns:
-    learning_rate -- Updated learning rate. Scalar 
+    parameters (dict): updated parameters 
+    v (dict): Adam variable, updated moving average of the first gradient
+    s (dict): Adam variable, updated moving average of the squared gradient
+
+    Note:
+    lrate is adjusted such that we don't need to compute v_corrected. 
+    This is the result of simple mathematical rearrangement in original equations.
     """
-    return learning_rate0 * (1 / (1 + (decay_rate * epoch_num)))
+    L = len(parameters) // 2
+    s_corrected = {}
+
+    # Pre-compute bias correction terms (only needed if t > 1)
+    if t > 1:
+        bias_correction1 = 1 - beta1 ** t
+        bias_correction2 = 1 - beta2 ** t
+    else:
+        # For numerical stability on first iteration
+        bias_correction1 = 1.0
+        bias_correction2 = 1.0
+
+    # Compute effective learning rate once
+    lrate = learning_rate / bias_correction1        
+
+    for l in range(1, L+1):
+        # Moving average of the gradients.
+        v['dW'+str(l)] = beta1 * v['dW'+str(l)] + (1-beta1) * grads['dW'+str(l)]
+        v['db'+str(l)] = beta1 * v['db'+str(l)] + (1-beta1) * grads['db'+str(l)]
+
+        # Moving average of the squared gradients.        
+        s['dW'+str(l)] = beta2 * s['dW'+str(l)] + (1 - beta2) * (np.square(grads['dW'+str(l)]))
+        s['db'+str(l)] = beta2 * s['db'+str(l)] + (1 - beta2) * (np.square(grads['db'+str(l)]))
+        
+        # Compute bias-corrected second raw moment estimate
+        s_corrected['dW'+str(l)] = s['dW'+str(l)] / bias_correction2
+        s_corrected['db'+str(l)] = s['db'+str(l)] / bias_correction2
+
+        # Update parameters
+        parameters['W'+str(l)] -= lrate * v['dW'+str(l)]/(np.sqrt(s_corrected['dW'+str(l)]) + epsilon)
+        parameters['b'+str(l)] -= lrate * v['db'+str(l)]/(np.sqrt(s_corrected['db'+str(l)]) + epsilon)
+    
+    return parameters, v, s
+
+
+def random_mini_batches(X, Y, mini_batch_size=64, seed=123):
+    """
+    Creates a list of random minibatches from (X, Y)
+    
+    Arguments:
+    X -- input data, of shape (input size, number of examples)
+    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
+    mini_batch_size -- size of the mini-batches, integer
+    
+    Returns:
+    mini_batches -- list of synchronous (mini_batch_X, mini_batch_Y)
+    """
+    np.random.seed(seed)
+    
+    m = X.shape[1]
+    mini_batches = []
+
+    # Shuffle
+    indices = list(np.random.permutation(m))
+    X = X[:, indices]
+    Y = Y[:, indices].reshape((1,m))
+
+    inc = mini_batch_size
+
+    # Partition
+    num_complete_mini_batches = floor(m/inc)
+
+    for k in range(num_complete_mini_batches):
+        mini_batch_X = X[:, k * inc : (k + 1) * inc]
+        mini_batch_Y = Y[:, k * inc : (k + 1) * inc]
+        mini_batch = (mini_batch_X, mini_batch_Y)
+        mini_batches.append(mini_batch)
+
+    # end case where last batch has < mini_batch_size examples
+    mini_batch_X = X[:, num_complete_mini_batches * mini_batch_size : m]
+    mini_batch_Y = Y[:, num_complete_mini_batches * mini_batch_size : m]
+    mini_batch = (mini_batch_X, mini_batch_Y)
+    mini_batches.append(mini_batch)
+
+    return mini_batches
+
 
 def schedule_lr_decay(learning_rate0, epoch_num, decay_rate, timeInterval=1000):
     """
